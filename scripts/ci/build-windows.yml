@@ -1,0 +1,56 @@
+name: Build Windows Application
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows (.exe)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm install --force
+
+      - name: Install Windows Native Dependencies
+        run: |
+          npm install --no-save --force @lydell/node-pty-win32-x64@1.2.0-beta.12 @parcel/watcher-win32-x64@2.5.1
+
+      - name: Build Windows Executables (.exe & NSIS)
+        run: |
+          npx electron-builder --win --x64
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PhaseFoundry-Code-Windows-x64
+          path: |
+            dist/*.exe
+            dist/*.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
