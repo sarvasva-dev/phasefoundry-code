@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=PhaseFoundry Code
+GenericName=AI Coding Studio
+Comment=PhaseFoundry AI Coding Agent & Studio
+Exec=/home/sarthak/.local/bin/phasefoundry-code %U
+Icon=/home/sarthak/.local/share/icons/hicolor/512x512/apps/phasefoundry-code.png
+Terminal=false
+Type=Application
+Categories=Development;IDE;
+MimeType=x-scheme-handler/opencode;x-scheme-handler/phasefoundry;
+StartupWMClass=PhaseFoundry Code
+StartupNotify=true

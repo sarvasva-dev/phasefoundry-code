@@ -1,0 +1,11 @@
+#!/bin/bash
+DIR="$HOME/.local/share/phasefoundry-code"
+BIN="$DIR/bin/phasefoundry_desktop"
+
+for var in $(env | cut -d= -f1 | grep '^SNAP'); do
+    unset "$var"
+done
+
+export PATH="/snap/opencode/current/usr/bin:$PATH"
+
+exec "$BIN" --no-sandbox "$@"

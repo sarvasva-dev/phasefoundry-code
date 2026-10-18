@@ -1,0 +1,139 @@
+// -- snap: AppArmor onexec transition --
+// Prepended to the desktop app's Electron main and sidecar bundles at build
+// time (see the opencode-desktop part in snap/snapcraft.yaml).
+//
+// snapd gives classic snaps a complain-mode (log-only) AppArmor profile whose
+// label is inherited by everything the desktop app spawns. If a child is
+// itself a snap (e.g. `juju debug-log > file`), snap-confine rejects file
+// descriptors that were opened under our label, so redirection fails with
+// "bad file descriptor" (see canonical/pi-coding-agent-snap#26,
+// LP: #1849753). The dock identifies the app's windows by falling back to the
+// owning process's AppArmor label, so we leave this process under the snap
+// label and instead arm AppArmor's onexec transition: it doesn't touch our
+// own label, but is inherited by every process forked from this thread from
+// now on and moves each of them to unconfined the moment it calls exec. Only
+// act under our own complain-mode label (the wrapper has already unset
+// SNAP_INSTANCE_NAME, so match the instance name by pattern); ignore any
+// failure. Written without imports so it is valid at the top of an ES module.
+;(() => {
+  try {
+    const fs = process.getBuiltinModule("node:fs")
+    const dir = fs.existsSync("/proc/thread-self/attr/apparmor/current")
+      ? "/proc/thread-self/attr/apparmor"
+      : "/proc/thread-self/attr"
+    const label = fs.readFileSync(dir + "/current", "utf8").replace(/\0/g, "").trim()
+    if (/^snap\.opencode(_[a-z0-9]+)?\.[^ ]+ \(complain\)$/.test(label)) {
+      fs.writeFileSync(dir + "/exec", "exec unconfined")
+    }
+  } catch {}
+})()
+import __cjs_mod__ from "node:module";
+const __filename = import.meta.filename;
+const __dirname = import.meta.dirname;
+const require2 = __cjs_mod__.createRequire(import.meta.url);
+import * as http from "node:http";
+import * as tls from "node:tls";
+const parentPort = getParentPort();
+let listener;
+parentPort.on("message", (event) => {
+  const command = parseCommand(event.data);
+  if (!command) return;
+  if (command.type === "stop") {
+    void stop();
+    return;
+  }
+  void start(command);
+});
+async function start(command) {
+  try {
+    prepareSidecarEnv(command.password, command.userDataPath);
+    ensureLoopbackNoProxy();
+    useSystemCertificates();
+    useEnvProxy();
+    const { Server } = await import("./chunks/node-Be5_RMr1.js");
+    listener = await Server.listen({
+      port: command.port,
+      hostname: command.hostname,
+      username: "opencode",
+      password: command.password,
+      cors: ["oc://renderer"]
+    });
+    parentPort.postMessage({ type: "ready" });
+  } catch (error) {
+    parentPort.postMessage({ type: "error", error: serializeError(error) });
+    setImmediate(() => process.exit(1));
+  }
+}
+async function stop() {
+  try {
+    await listener?.stop();
+  } finally {
+    listener = void 0;
+    parentPort.postMessage({ type: "stopped" });
+    setImmediate(() => process.exit(0));
+  }
+}
+function prepareSidecarEnv(password, userDataPath) {
+  Object.assign(process.env, {
+    OPENCODE_SERVER_USERNAME: "opencode",
+    OPENCODE_SERVER_PASSWORD: password,
+    XDG_STATE_HOME: process.env.XDG_STATE_HOME ?? userDataPath
+  });
+}
+function ensureLoopbackNoProxy() {
+  const loopback = ["127.0.0.1", "localhost", "::1"];
+  const upsert = (key) => {
+    const items = (process.env[key] ?? "").split(",").map((value) => value.trim()).filter((value) => Boolean(value));
+    for (const host of loopback) {
+      if (items.some((value) => value.toLowerCase() === host)) continue;
+      items.push(host);
+    }
+    process.env[key] = items.join(",");
+  };
+  upsert("NO_PROXY");
+  upsert("no_proxy");
+}
+function useSystemCertificates() {
+  try {
+    const nodeTls = tls;
+    nodeTls.setDefaultCACertificates([
+      .../* @__PURE__ */ new Set([...nodeTls.getCACertificates("default"), ...nodeTls.getCACertificates("system")])
+    ]);
+  } catch (error) {
+    console.warn("failed to load system certificates", error);
+  }
+}
+function useEnvProxy() {
+  try {
+    ;
+    http.setGlobalProxyFromEnv();
+  } catch (error) {
+    console.warn("failed to load proxy environment", error);
+  }
+}
+function parseCommand(value) {
+  if (!value || typeof value !== "object") return;
+  const command = value;
+  if (command.type === "stop") return { type: "stop" };
+  if (command.type !== "start") return;
+  if (typeof command.hostname !== "string") return;
+  if (typeof command.port !== "number") return;
+  if (typeof command.password !== "string") return;
+  if (typeof command.userDataPath !== "string") return;
+  return {
+    type: "start",
+    hostname: command.hostname,
+    port: command.port,
+    password: command.password,
+    userDataPath: command.userDataPath
+  };
+}
+function serializeError(error) {
+  if (error instanceof Error) return { message: error.message, stack: error.stack };
+  return { message: String(error) };
+}
+function getParentPort() {
+  const port = process.parentPort;
+  if (!port) throw new Error("Sidecar parent port unavailable");
+  return port;
+}

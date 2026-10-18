@@ -1,0 +1,9 @@
+#!/bin/bash
+if [ "$1" = "desktop" ] || [ "$1" = "ui" ] || [ "$1" = "gui" ]; then
+    shift
+    nohup ~/.local/bin/phasefoundry-code "$@" >/dev/null 2>&1 &
+    exit 0
+fi
+
+# Otherwise route to opencode CLI
+exec /snap/bin/opencode "$@"
