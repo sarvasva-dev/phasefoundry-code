@@ -38,6 +38,7 @@ import { createServer } from "node:net";
 import { homedir, userInfo, tmpdir } from "node:os";
 import { extname, dirname, join, resolve, relative, isAbsolute, basename } from "node:path";
 import { setDefaultCACertificates, getCACertificates } from "node:tls";
+process.on("uncaughtException", (err) => { try { dialog?.showErrorBox("PhaseFoundry Code Error", String(err?.stack || err)); } catch {} });
 import electron, { app, crashReporter, netLog, shell, protocol, BrowserWindow, net, nativeImage, nativeTheme, dialog, ipcMain, clipboard, Menu, utilityProcess } from "electron";
 import { Effect, Deferred, Fiber } from "effect";
 import contextMenu from "electron-context-menu";
@@ -54,7 +55,22 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-sqlite";
 import { sqliteTable, text, blob } from "drizzle-orm/sqlite-core";
 import pkg from "electron-updater";
-import * as pty from "@lydell/node-pty-linux-x64";
+let pty;
+try {
+  pty = process.platform === "win32"
+    ? require2("@lydell/node-pty-win32-x64")
+    : require2("@lydell/node-pty-linux-x64");
+} catch (e) {
+  try {
+    pty = require2("@lydell/node-pty-win32-x64");
+  } catch {
+    try {
+      pty = require2("@lydell/node-pty-linux-x64");
+    } catch {
+      pty = { spawn: () => { throw new Error("pty not available on this platform"); } };
+    }
+  }
+}
 const execFilePromise = util.promisify(execFile);
 const exists = (path) => access(path).then(() => true).catch(() => false);
 function checkAppExists(appName) {

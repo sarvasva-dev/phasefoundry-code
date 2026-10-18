@@ -47,7 +47,22 @@ import { spawn } from "child_process";
 import { isIP } from "node:net";
 import https from "node:https";
 import zlib, { gzipSync, deflateSync } from "node:zlib";
-import * as pty from "@lydell/node-pty-linux-x64";
+let pty;
+try {
+  pty = process.platform === "win32"
+    ? require("@lydell/node-pty-win32-x64")
+    : require("@lydell/node-pty-linux-x64");
+} catch (e) {
+  try {
+    pty = require("@lydell/node-pty-win32-x64");
+  } catch {
+    try {
+      pty = require("@lydell/node-pty-linux-x64");
+    } catch {
+      pty = { spawn: () => { throw new Error("pty not available on this platform"); } };
+    }
+  }
+}
 import { createServer, STATUS_CODES } from "http";
 import { setTimeout as setTimeout$1 } from "node:timers/promises";
 import { EventEmitter } from "events";
